@@ -1,0 +1,20 @@
+services:
+  app:
+    image: ghcr.io/mike-urssu/ming-mang-mong:latest
+    restart: unless-stopped
+    init: true
+    environment:
+      PUBLIC_URL: https://ming-mang-mong.jjoon.cloud
+    networks:
+      - proxy
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy
+      - traefik.http.routers.ming-mang-mong.rule=Host(`ming-mang-mong.jjoon.cloud`)
+      - traefik.http.routers.ming-mang-mong.entrypoints=websecure
+      - traefik.http.routers.ming-mang-mong.tls.certresolver=letsencrypt
+      - traefik.http.services.ming-mang-mong.loadbalancer.server.port=3000
+
+networks:
+  proxy:
+    external: true
