@@ -1,6 +1,6 @@
 services:
   app:
-    image: ghcr.io/mike-urssu/ming-mang-mong:latest
+    image: ghcr.io/mike-urssu/ming-mang-mong:${IMAGE_TAG:-latest}
     restart: unless-stopped
     init: true
     environment:
