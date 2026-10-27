@@ -497,14 +497,14 @@ const crackMat = M(0xffffff, { roughness: 0.8, map: canvasTex(128, 128, g => {
   g.beginPath(); g.moveTo(10, 30); g.lineTo(45, 55); g.lineTo(40, 80); g.lineTo(75, 100); g.lineTo(118, 96);
   g.moveTo(45, 55); g.lineTo(90, 40); g.lineTo(110, 12); g.stroke();
 }) });
-const STILL = 1.2; // 구름 위에 이만큼 가만히 서 있으면 무너지기 시작
+const STAY = 1.4; // 구름을 밟고 이만큼 있으면 흔들리기 시작 → 0.6초 뒤(밟은 지 2초) 떨어짐
 function cloudPad(x, top, z, { mx = 0, my = 0, mz = 0, speed = 1, crumble = false } = {}) {
   const s = box(x, top - 0.3, z, 2, 0.6, 2, crumble ? crackMat : cloudPadMat);
   for (const [px, pz] of [[-0.8, -0.8], [0.8, -0.8], [-0.8, 0.8], [0.8, 0.8], [0, 0]]) { // 아래쪽 뭉게뭉게 장식
     const b = new THREE.Mesh(sphereGeo, crumble ? crackMat : cloudPadMat); b.position.set(px, -0.35, pz); b.scale.set(0.6, 0.4, 0.6); s.mesh.add(b);
   }
   const home = s.mesh.position.clone(), prev = new THREE.Vector3(), phase = rand(0, 6);
-  const st = { ph: 0, t: 0, still: 0 }; // 0 그대로 → 1 흔들림 0.6초 → 2 떨어짐 0.8초 → 3 사라짐 3초 → 0 (금 간 구름은 밟자마자, 다른 구름은 가만히 서 있으면)
+  const st = { ph: 0, t: 0, stay: 0 }; // 0 그대로 → 1 흔들림 0.6초 → 2 떨어짐 0.8초 → 3 사라짐 3초 → 0 (금 간 구름은 밟자마자, 다른 구름은 오래 밟고 있으면)
   s.delta = new THREE.Vector3(); // 이번 프레임 이동량 → 위에 선 캐릭터를 같이 실어 나름
   traps.push({
     step(dt) {
@@ -513,8 +513,8 @@ function cloudPad(x, top, z, { mx = 0, my = 0, mz = 0, speed = 1, crumble = fals
       pos.set(home.x + mx * Math.sin(w), home.y + my * Math.sin(w), home.z + mz * Math.sin(w));
       if (role !== 'guest' && st.ph === 0) {
         const on = chars.filter(c => c.ground === s);
-        st.still = on.some(c => Math.hypot(c.vel.x, c.vel.z) < 0.5) ? st.still + dt : 0;
-        if (st.still > STILL || crumble && on.some(c => !c.light)) { st.ph = 1; st.t = 0.6; st.still = 0; fx('crack'); } // 가벼운 Ming은 밟기만 해선 안 무너뜨림
+        st.stay = on.length ? st.stay + dt : 0;
+        if (st.stay > STAY || crumble && on.some(c => !c.light)) { st.ph = 1; st.t = 0.6; st.stay = 0; fx('crack'); } // 가벼운 Ming은 밟기만 해선 안 무너뜨림
       } else if (st.ph && (st.t -= dt) <= 0 && role !== 'guest') {
         s.mesh.visible = true; // 다시 나타날 자리에 누가 있으면 조금 기다림
         if (st.ph === 3 && chars.some(c => !c.off && overlaps(c, s))) st.t = 0.2;
@@ -537,7 +537,7 @@ cloudPad(62.4, 3.0, -1.2, { my: 1.2, speed: 2.4 });
 cloudPad(66.6, 3.3, 1.2, { mz: 2, speed: 1.8, crumble: true });
 cloudPad(70.8, 3.1, -1.2, { mx: 1, speed: 2.4 });
 cloudPad(75, 2.9, 1, { mz: 1.8, speed: 2.1 });
-SIGN('③ 구름 징검다리! 움직이는 구름을 밟고 건너요\n금 간 구름은 밟으면 무너져요 (가벼운 Ming은 괜찮아요)\n어느 구름이든 가만히 서 있으면 떨어져요!', 40, 7, -3, '#8fdcff');
+SIGN('③ 구름 징검다리! 움직이는 구름을 밟고 건너요\n금 간 구름은 밟으면 무너져요 (가벼운 Ming은 괜찮아요)\n어느 구름이든 2초 넘게 밟고 있으면 떨어져요!', 40, 7, -3, '#8fdcff');
 
 // Area 4 (x 64..92 + W): 가시밭길 — 바닥 곳곳에서 가시가 랜덤으로 솟고, 톱니바퀴가 제멋대로 오감
 ground(78 + W, 1.6, 0, 28, 2, 8, 0xc9b6ff, 0x7f6aa8);
