@@ -805,7 +805,9 @@ function moveAxis(c, axis, d) {
   for (const s of colliders) {
     if (s === c || !s.mesh.visible || !overlaps(c, s)) continue;
     const p = s.mesh.position[axis], e = s.half[axis] + c.half[axis];
-    c.pos[axis] = d > 0 ? p - e : p + e; hit = s;
+    const onTop = s.delta && c.pos.y - c.half.y > s.mesh.position.y + s.half.y - 0.3; // 움직이는 구름이 발밑으로 파고든 경우
+    if (onTop && axis !== 'y') continue; // 옆으로 밀어내지 않고
+    c.pos[axis] = d > 0 && !onTop ? p - e : p + e; hit = s; // y축에서 위로 올려 줌
   }
   return hit;
 }
