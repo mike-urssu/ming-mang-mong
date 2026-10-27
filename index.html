@@ -1080,9 +1080,46 @@ addEventListener('pointerdown', () => actx?.resume()); // 링크로 바로 참�
 const roomFromUrl = new URLSearchParams(location.search).get('room');
 if (roomFromUrl) { $('#codeIn').value = roomFromUrl; goOnline({ t: 'join', code: roomFromUrl }); }
 
+// ---------- 음성 채팅: 방에 들어가면 마이크를 켜고, 같은 방 사람과 WebRTC로 직접 연결 (서버는 연결 정보만 중계) ----------
+// ponytail: STUN만 씀 — 엄격한 회사망·일부 모바일망에선 연결이 안 될 수 있음, 그러면 TURN 서버(coturn) 추가
+let mic = null; const peers = {}; // seat → { pc, q: 순서대로 처리할 작업 줄, audio }
+const startMic = () => mic ??= (navigator.mediaDevices ? navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }) : Promise.reject())
+  .then(s => (toast('🎙️ 마이크가 켜졌어요! 친구들과 대화할 수 있어요'), s), () => (toast('🔇 마이크를 쓸 수 없어서 듣기만 해요'), null));
+const rtc = (to, d) => net.send(JSON.stringify({ t: 'rtc', to, d }));
+function peer(seat) {
+  if (peers[seat]) return peers[seat];
+  const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+  const p = peers[seat] = { pc, q: Promise.resolve() };
+  pc.onicecandidate = e => e.candidate && rtc(seat, { c: e.candidate });
+  pc.ontrack = e => {
+    const a = p.audio = new Audio(); a.srcObject = e.streams[0] ?? new MediaStream([e.track]);
+    a.play().catch(() => addEventListener('pointerdown', () => a.play(), { once: true })); // 링크로 바로 들어오면 재생이 막혀 있을 수 있음
+  };
+  return p;
+}
+// 마이크 허락을 기다리지 않고 먼저 연결 → 허락되면 그때부터 내 목소리를 보냄 (재협상 없이 트랙만 끼움)
+const sendMic = pc => startMic().then(s => s && pc.signalingState !== 'closed' && pc.getTransceivers()[0]?.sender.replaceTrack(s.getAudioTracks()[0])).catch(() => {});
+const queue = (seat, job) => { const p = peer(seat); p.q = p.q.then(job).catch(() => {}); };
+const call = seat => queue(seat, async () => {
+  const { pc } = peers[seat];
+  pc.addTransceiver('audio', { direction: 'sendrecv' }); sendMic(pc);
+  await pc.setLocalDescription(); rtc(seat, { sdp: pc.localDescription });
+});
+const onRtc = ({ from, d }) => queue(from, async () => {
+  const { pc } = peers[from];
+  if (d.c) return pc.addIceCandidate(d.c);
+  await pc.setRemoteDescription(d.sdp);
+  if (d.sdp.type === 'offer') {
+    pc.getTransceivers()[0].direction = 'sendrecv'; sendMic(pc);
+    await pc.setLocalDescription(); rtc(from, { sdp: pc.localDescription });
+  }
+});
+function hangUp(seat) { const p = peers[seat]; if (!p) return; p.pc.close(); p.audio?.pause(); delete peers[seat]; }
+
 function onNet(m) {
   if (m.t === 'created' || m.t === 'joined') {
     role = m.t === 'created' ? 'host' : 'guest'; mySeat = m.seat || 0;
+    startMic();
     const local = /^(localhost|127\.|\[::1\])/.test(location.hostname); // localhost 링크는 친구가 못 여니까 LAN 주소로
     $('#roomCode').textContent = m.code;
     $('#inviteUrl').textContent = (m.url || local && m.lan?.[0] || location.origin) + '/?room=' + m.code; // 고정 도메인 우선
@@ -1091,11 +1128,14 @@ function onNet(m) {
     renderLobby();
   } else if (m.t === 'seats') {
     seats = m.seats;
+    for (const s of seats) if (s > mySeat && !peers[s]) call(s); // 번호가 작은 쪽이 먼저 연결을 건다
+    for (const s in peers) if (!seats.includes(+s)) hangUp(+s);
     if (role === 'host') { for (const k in picks) if (!seats.includes(+k)) delete picks[k]; sendPicks(); } // 나간 자리의 선택은 풀어줌
     renderLobby();
   }
   else if (m.t === 'lobby') { picks = m.picks; renderLobby(); }
   else if (m.t === 'pick' && role === 'host') setPick(m.seat, m.c);
+  else if (m.t === 'rtc') onRtc(m);
   else if (m.t === 'err') toast('⚠️ ' + m.msg);
   else if (m.t === 'in') {
     const p = netIn[m.seat] ??= {};
@@ -1103,6 +1143,7 @@ function onNet(m) {
     p.jump ||= m.j;
     if (m.r && state === 'play') resetAll();
   } else if (m.t === 'left') {
+    hangUp(m.seat);
     const i = players.findIndex(p => p.seat === m.seat);
     if (i >= 0) { players.splice(i, 1); renderCards(); fx('toast', `👋 P${m.seat + 1} 친구가 나갔어요`); }
   } else if (m.t === 'start') start(m.team.map(([c, seat]) => ({ c, seat })));

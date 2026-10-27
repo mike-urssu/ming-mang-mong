@@ -52,6 +52,8 @@ wss.on('connection', ws => {
       room = r; seat = free; r.guests.set(seat, ws);
       send(ws, { t: 'joined', seat, code: r.code, url: PUBLIC_URL });
       broadcastSeats(r);
+    } else if (room && m.t === 'rtc') { // 음성 채팅 연결 정보 → 지정한 사람에게만
+      send(m.to === 0 ? room.host : room.guests.get(m.to), { t: 'rtc', from: seat, d: m.d });
     } else if (room && seat === 0) { // 호스트 → 모든 게스트 (시작 신호, 스냅샷)
       if (m.t === 'start') room.started = true;
       const s = JSON.stringify(m);
