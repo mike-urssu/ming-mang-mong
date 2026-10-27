@@ -488,64 +488,68 @@ mover(box(31.5, -1, 0, 1, 1.8, 8, 0x7ab8ff), 1.9, 1.5, () => btn1.latched, true)
 const sign2 = SIGN('② 친구 머리를 밟고 올라가요! (Mang은 2단 점프)\n위의 ⭐ 버튼 → 계단 등장', 25, 4.6, -3, '#ff8c3a');
 spikes(38, 2.6, 0, 2, 8);
 
-// Area 3 (x 42..64): 구름 징검다리 — 떠 있는 구름을 밟고 건너는 점프 구간. 움직이는 구름 + 밟으면 무너지는 금 간 구름
+const W = 14; // 구름 구간을 넓히면서 뒤 구역들을 이만큼 뒤로 밀었음
+// Area 3 (x 42..64 + W): 구름 징검다리 — 떠 있는 구름을 밟고 건너는 점프 구간. 움직이는 구름 + 밟으면 무너지는 금 간 구름
 const cloudPadMat = M(0xa8dcff, { roughness: 0.6, emissive: 0x6fc3ff, emissiveIntensity: 0.25 }); // 배경 구름과 구분되게 하늘색
 const crackMat = M(0xffffff, { roughness: 0.8, map: canvasTex(128, 128, g => {
   g.fillStyle = '#f1e6da'; g.fillRect(0, 0, 128, 128); g.strokeStyle = '#8a6a55'; g.lineWidth = 4;
   g.beginPath(); g.moveTo(10, 30); g.lineTo(45, 55); g.lineTo(40, 80); g.lineTo(75, 100); g.lineTo(118, 96);
   g.moveTo(45, 55); g.lineTo(90, 40); g.lineTo(110, 12); g.stroke();
 }) });
+const STILL = 1.2; // 구름 위에 이만큼 가만히 서 있으면 무너지기 시작
 function cloudPad(x, top, z, { mx = 0, my = 0, mz = 0, speed = 1, crumble = false } = {}) {
   const s = box(x, top - 0.3, z, 2, 0.6, 2, crumble ? crackMat : cloudPadMat);
   for (const [px, pz] of [[-0.8, -0.8], [0.8, -0.8], [-0.8, 0.8], [0.8, 0.8], [0, 0]]) { // 아래쪽 뭉게뭉게 장식
     const b = new THREE.Mesh(sphereGeo, crumble ? crackMat : cloudPadMat); b.position.set(px, -0.35, pz); b.scale.set(0.6, 0.4, 0.6); s.mesh.add(b);
   }
   const home = s.mesh.position.clone(), prev = new THREE.Vector3(), phase = rand(0, 6);
-  const st = { ph: 0, t: 0 }; // 금 간 구름: 0 그대로 → 1 흔들림 0.6초 → 2 떨어짐 0.8초 → 3 사라짐 3초 → 0
+  const st = { ph: 0, t: 0, still: 0 }; // 0 그대로 → 1 흔들림 0.6초 → 2 떨어짐 0.8초 → 3 사라짐 3초 → 0 (금 간 구름은 밟자마자, 다른 구름은 가만히 서 있으면)
   s.delta = new THREE.Vector3(); // 이번 프레임 이동량 → 위에 선 캐릭터를 같이 실어 나름
   traps.push({
     step(dt) {
       const pos = s.mesh.position, w = T * speed + phase;
       prev.copy(pos);
       pos.set(home.x + mx * Math.sin(w), home.y + my * Math.sin(w), home.z + mz * Math.sin(w));
-      if (crumble) {
-        if (role !== 'guest' && st.ph === 0 && chars.some(c => c.ground === s && !c.light)) { // 가벼운 Ming은 안 무너뜨림
-          st.ph = 1; st.t = 0.6; fx('crack');
-        } else if (st.ph && (st.t -= dt) <= 0 && role !== 'guest') {
-          s.mesh.visible = true; // 다시 나타날 자리에 누가 있으면 조금 기다림
-          if (st.ph === 3 && chars.some(c => !c.off && overlaps(c, s))) st.t = 0.2;
-          else { st.ph = (st.ph + 1) % 4; st.t = [0, 0.6, 0.8, 3][st.ph]; if (st.ph === 2) fx('burst', pos, 0xffffff, 10, { speed: 2, up: 1, size: 0.25, life: 0.6, gravity: 2 }); }
-        }
-        if (st.ph === 1) { pos.x += (Math.random() - 0.5) * 0.12; pos.z += (Math.random() - 0.5) * 0.12; }
-        if (st.ph === 2) pos.y -= 6 * (0.8 - Math.max(0, st.t)) ** 2;
-        s.mesh.visible = st.ph !== 3;
+      if (role !== 'guest' && st.ph === 0) {
+        const on = chars.filter(c => c.ground === s);
+        st.still = on.some(c => Math.hypot(c.vel.x, c.vel.z) < 0.5) ? st.still + dt : 0;
+        if (st.still > STILL || crumble && on.some(c => !c.light)) { st.ph = 1; st.t = 0.6; st.still = 0; fx('crack'); } // 가벼운 Ming은 밟기만 해선 안 무너뜨림
+      } else if (st.ph && (st.t -= dt) <= 0 && role !== 'guest') {
+        s.mesh.visible = true; // 다시 나타날 자리에 누가 있으면 조금 기다림
+        if (st.ph === 3 && chars.some(c => !c.off && overlaps(c, s))) st.t = 0.2;
+        else { st.ph = (st.ph + 1) % 4; st.t = [0, 0.6, 0.8, 3][st.ph]; if (st.ph === 2) fx('burst', pos, 0xffffff, 10, { speed: 2, up: 1, size: 0.25, life: 0.6, gravity: 2 }); }
       }
+      if (st.ph === 1) { pos.x += (Math.random() - 0.5) * 0.12; pos.z += (Math.random() - 0.5) * 0.12; }
+      if (st.ph === 2) pos.y -= 6 * (0.8 - Math.max(0, st.t)) ** 2;
+      s.mesh.visible = st.ph !== 3;
       s.delta.subVectors(pos, prev);
     },
-    get: () => crumble ? [st.ph, r3(st.t)] : 0,
-    set(v) { if (crumble) [st.ph, st.t] = v; },
+    get: () => [st.ph, r3(st.t)],
+    set(v) { [st.ph, st.t] = v; },
   });
 }
-cloudPad(45, 2.6, 0, { my: 0.5, speed: 1.6 });
-cloudPad(48.4, 3.0, 0, { mz: 2.2, speed: 1.8 });
-cloudPad(51.8, 3.4, 0, { mz: 1.5, speed: 1.6, crumble: true });
-cloudPad(55.2, 3.0, 0, { my: 0.9, speed: 2.4 });
-cloudPad(58.6, 3.3, 0, { mz: 1.2, speed: 1.6, crumble: true });
-cloudPad(62, 2.9, 0, { mx: 0.6, speed: 2.8 });
-SIGN('③ 구름 징검다리! 움직이는 구름을 밟고 건너요\n금 간 구름은 밟으면 무너져요 (가벼운 Ming은 괜찮아요)', 40, 7, -3, '#8fdcff');
+cloudPad(45.6, 2.6, -1.2, { my: 1, speed: 2.1 }); // 8개를 지그재그로
+cloudPad(49.8, 2.9, 1.2, { mz: 2, speed: 1.8 });
+cloudPad(54, 3.2, -1.2, { my: 1.2, speed: 2.1, crumble: true });
+cloudPad(58.2, 3.4, 1.2, { mx: 1, speed: 2.4 });
+cloudPad(62.4, 3.0, -1.2, { my: 1.2, speed: 2.4 });
+cloudPad(66.6, 3.3, 1.2, { mz: 2, speed: 1.8, crumble: true });
+cloudPad(70.8, 3.1, -1.2, { mx: 1, speed: 2.4 });
+cloudPad(75, 2.9, 1, { mz: 1.8, speed: 2.1 });
+SIGN('③ 구름 징검다리! 움직이는 구름을 밟고 건너요\n금 간 구름은 밟으면 무너져요 (가벼운 Ming은 괜찮아요)\n어느 구름이든 가만히 서 있으면 떨어져요!', 40, 7, -3, '#8fdcff');
 
-// Area 4 (x 64..92): 가시밭길 — 바닥 곳곳에서 가시가 랜덤으로 솟고, 톱니바퀴가 제멋대로 오감
-ground(78, 1.6, 0, 28, 2, 8, 0xc9b6ff, 0x7f6aa8);
-[[65, -3.5], [91, -3.6]].forEach(([x, z]) => tree(x, 2.6, z, 0.9));
-spikes(81, 2.6, 0, 18, 8, 0.45);
-[75, 80.5, 86].forEach(x => saw(x, 3, 0, 1.8, 3.3, 1.6));
-SIGN('④ 가시밭길! 바닥 어디서 가시가 솟을지 몰라요\n가시 끝이 살짝 보이면 얼른 피해요. 톱니바퀴도 조심!', 67, 7, -3, '#c9b6ff');
+// Area 4 (x 64..92 + W): 가시밭길 — 바닥 곳곳에서 가시가 랜덤으로 솟고, 톱니바퀴가 제멋대로 오감
+ground(78 + W, 1.6, 0, 28, 2, 8, 0xc9b6ff, 0x7f6aa8);
+[[65, -3.5], [91, -3.6]].forEach(([x, z]) => tree(x + W, 2.6, z, 0.9));
+spikes(81 + W, 2.6, 0, 18, 8, 0.45);
+[75, 80.5, 86].forEach(x => saw(x + W, 3, 0, 1.8, 3.3, 1.6));
+SIGN('④ 가시밭길! 바닥 어디서 가시가 솟을지 몰라요\n가시 끝이 살짝 보이면 얼른 피해요. 톱니바퀴도 조심!', 67 + W, 7, -3, '#c9b6ff');
 
 // ---- 함께 행동해야 하는 구역 (필요 인원 = 플레이어 수, 혼자면 1명) ----
 const need = () => Math.max(1, players.length);
 const has = i => players.some(p => p.c === i); // 이번 판에 고른 캐릭터인가
 const held = p => p.pressed || (players.length === 1 && p.latched); // 혼자면 한 번 밟은 발판은 계속 눌린 채로
-const O = 28; // 뒤 구역들(상자·줄넘기·패드)을 원래 좌표에서 이만큼 뒤로 밀었음
+const O = 28 + W; // 뒤 구역들(상자·줄넘기·패드)을 원래 좌표에서 이만큼 뒤로 밀었음
 
 // Area 6 (x 88..104, 구멍 104..106): 거대 상자 — 필요 인원이 동시에 밀어야 움직이고, 힘이 모자라면 제자리로 미끄러져 돌아감
 ground(72 + O, 1.6, 0, 16, 2, 8, 0xffb3c8, 0xa86f8f);
@@ -662,7 +666,7 @@ flag.position.set(GOAL.x + 2.1, GOAL.y + 3.1, -2.8); scene.add(flag);
 label('🏁 모두 모이면 클리어!', GOAL.x, GOAL.y + 4.6, 0, { border: '#ffc400' });
 
 // [x, floorY] 체크포인트 = 챕터 시작점
-const CPS = [[0, 0], [12.5, 0], [35, 2.6], [66, 2.6], [66 + O, 2.6], [83.5 + O, 2.6], [95.5 + O, 2.6]];
+const CPS = [[0, 0], [12.5, 0], [35, 2.6], [66 + W, 2.6], [66 + O, 2.6], [83.5 + O, 2.6], [95.5 + O, 2.6]];
 
 // ---------- characters ----------
 const DEFS = [
