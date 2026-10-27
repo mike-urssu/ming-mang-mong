@@ -467,17 +467,17 @@ function saw(x, y, z, rx, rz, ry = 1.6) { // 좌우(x)·앞뒤(z)·위아래(y)�
 const doorMat = (a, b) => M(0xffffff, { map: stripes(a, b, 3, 4), roughness: 0.5 });
 const SIGN = (t, x, y, z, border) => label(t, x, y, z, { border });
 
-// Area 1: ground (x -6..26) — 발판 + 문, 회전 막대
-ground(13, -0.5, 0, 38, 1, 8, 0x7ed957, 0xa0703f);
-scatter(-5.5, 31.5, 0);
-[[-4.5, -3.4], [-1.5, -3.6], [8.2, -3.5], [29.5, -3.5]].forEach(([x, z]) => tree(x, 0, z, rnd(0.8, 1.1)));
-const plateA = plate(6, 0, -2, 2, 2, 0xffd84a, { icon: '👣' });
-const plateB = plate(12.5, 0, 2.5, 2, 2, 0xffd84a, { icon: '👣' });
-mover(box(10, 3, 0, 1, 6, 12, doorMat('#ffd84a', '#7a4cc2')), 7, 2, () => held(plateA) || held(plateB), false, '🚪 문이 열렸어요! 친구가 지나갈 때까지 버텨요');
-const sign1 = SIGN('① 노란 발판을 밟으면 문이 열려요\n누군가는 남아서 도와줘야 해요!', 3, 3.4, -3, '#ffd84a');
-sweeper(18, 0, 0, 7);
-sweeper(25.5, 0, 0, 7);
-SIGN('⚠️ 빨간 막대 2개는 점프로 넘어요! 속도가 수시로 바뀌어요', 21.75, 2.4, 3, '#ff4d5e');
+const S = 15; // 막대 2개를 더 넣으려고 시작 구역(발판·문)을 이만큼 왼쪽으로 옮겼음
+// Area 1: ground (x -6 - S..32) — 발판 + 문, 회전 막대
+ground(13 - S / 2, -0.5, 0, 38 + S, 1, 8, 0x7ed957, 0xa0703f);
+scatter(-5.5 - S, 31.5, 0);
+[[-4.5 - S, -3.4], [-1.5 - S, -3.6], [8.2 - S, -3.5], [29.5, -3.5]].forEach(([x, z]) => tree(x, 0, z, rnd(0.8, 1.1)));
+const plateA = plate(6 - S, 0, -2, 2, 2, 0xffd84a, { icon: '👣' });
+const plateB = plate(12.5 - S, 0, 2.5, 2, 2, 0xffd84a, { icon: '👣' });
+mover(box(10 - S, 3, 0, 1, 6, 12, doorMat('#ffd84a', '#7a4cc2')), 7, 2, () => held(plateA) || held(plateB), false, '🚪 문이 열렸어요! 친구가 지나갈 때까지 버텨요');
+const sign1 = SIGN('① 노란 발판을 밟으면 문이 열려요\n누군가는 남아서 도와줘야 해요!', 3 - S, 3.4, -3, '#ffd84a');
+[3, 10.5, 18, 25.5].forEach(x => sweeper(x, 0, 0, 7));
+SIGN('⚠️ 빨간 막대 4개는 점프로 넘어요! 속도가 수시로 바뀌어요', 14.25, 2.4, 3, '#ff4d5e');
 
 // Area 2: ledge (x 26..36, top 2.6) — 머리 밟고 올라가기, 버튼 → 계단, 가시
 ground(37, 0.6, 0, 10, 4, 8, 0xffd166, 0xd0894a);
@@ -666,7 +666,7 @@ flag.position.set(GOAL.x + 2.1, GOAL.y + 3.1, -2.8); scene.add(flag);
 label('🏁 모두 모이면 클리어!', GOAL.x, GOAL.y + 4.6, 0, { border: '#ffc400' });
 
 // [x, floorY] 체크포인트 = 챕터 시작점
-const CPS = [[0, 0], [12.5, 0], [35, 2.6], [66 + W, 2.6], [66 + O, 2.6], [83.5 + O, 2.6], [95.5 + O, 2.6]];
+const CPS = [[-S, 0], [12.5 - S, 0], [35, 2.6], [66 + W, 2.6], [66 + O, 2.6], [83.5 + O, 2.6], [95.5 + O, 2.6]];
 
 // ---------- characters ----------
 const DEFS = [
