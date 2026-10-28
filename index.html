@@ -59,7 +59,7 @@
   #progress i.on { background: #ffc21a; box-shadow: 0 0 12px #ffc21a; transform: scale(1.12); }
   #progress s { width: 16px; height: 4px; background: rgba(255,255,255,.7); }
   #help { position: absolute; top: 16px; right: 16px; font-size: 14px; }
-  #falls { position: absolute; top: 14px; left: 16px; }
+  #falls { position: absolute; top: 14px; left: 16px; font-size: 32px; padding: 6px 24px; }
   #views { position: absolute; top: 60px; right: 20px; display: flex; flex-direction: column; gap: 24px; }
   .view { position: relative; width: min(24vw, 300px); aspect-ratio: 16 / 10; outline: 4px solid var(--pc); box-shadow: 0 8px 20px rgba(0,0,0,.25); } /* 안쪽은 캔버스가 직접 그림 */
   #cards { position: absolute; left: 16px; right: 16px; bottom: 16px; display: flex; justify-content: space-between; align-items: flex-end; }
@@ -338,6 +338,10 @@ function relabel(sp, text) { // 글자가 바뀔 때만 캔버스를 다시 그�
   const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
   sp.material.map?.dispose(); sp.material.map = tex; sp.material.needsUpdate = true;
   const h = scale * (lines.length + 0.5); sp.scale.set(h * cv.width / cv.height, h, 1);
+  // 한글 폰트는 글자 범위별로 쪼개져 받아짐 → 아직 안 받은 글자는 기본 폰트(얇게)로 그려졌으니, 받은 뒤 다시 그림
+  if (!document.fonts.check(font, text)) document.fonts.load(font, text).then(() => {
+    if (sp.userData.text === text && document.fonts.check(font, text)) { sp.userData.text = null; relabel(sp, text); }
+  });
 }
 
 // ---------- scenery ----------
@@ -1256,6 +1260,11 @@ function guestStep(dt) {
 }
 
 // ---------- camera ----------
+// 카메라 방향 (수평, 수직) 비율. 보통은 34° 정도로 비스듬히, 구름 구간(x 44~76)에선 60° 정도로 내려다봐서 앞뒤 위치가 잘 보이게
+function tilt(x) {
+  const k = state === 'play' || state === 'pause' ? Math.max(0, Math.min(1, (x - 40) / 4, (80 - x) / 4)) : 0;
+  return [0.85 - 0.35 * k, 0.58 + 0.3 * k];
+}
 const focus = new THREE.Vector3(28, 1, 0), camTarget = new THREE.Vector3();
 let camDist = 42, camAng = 0;
 function updateCamera(dt) {
@@ -1270,7 +1279,8 @@ function updateCamera(dt) {
   }
   const k = 1 - Math.exp(-dt * (state === 'play' || state === 'pause' ? 5 : 1.5));
   focus.lerp(camTarget, k); camDist += (dist - camDist) * k * 0.6; camAng += (ang - camAng) * k;
-  camera.position.set(focus.x + Math.sin(camAng) * camDist * 0.85, focus.y + camDist * 0.58, focus.z + Math.cos(camAng) * camDist * 0.85);
+  const [hz, vt] = tilt(focus.x);
+  camera.position.set(focus.x + Math.sin(camAng) * camDist * hz, focus.y + camDist * vt, focus.z + Math.cos(camAng) * camDist * hz);
   camera.lookAt(focus.x, focus.y + 1, focus.z);
   sky.position.copy(camera.position);
   scene.fog.near = state === 'title' ? 150 : 70; scene.fog.far = state === 'title' ? 380 : 230;
@@ -1278,7 +1288,8 @@ function updateCamera(dt) {
   for (const p of others()) {
     const v = peeks[p.seat], c = chars[p.c].pos;
     v.f.distanceTo(c) > 8 ? v.f.copy(c) : v.f.lerp(c, k); // 리스폰 등 순간이동은 바로
-    v.cam.position.set(v.f.x, v.f.y + 11 * 0.58, v.f.z + 11 * 0.85); v.cam.lookAt(v.f.x, v.f.y + 1, v.f.z);
+    const [hz, vt] = tilt(v.f.x);
+    v.cam.position.set(v.f.x, v.f.y + 11 * vt, v.f.z + 11 * hz); v.cam.lookAt(v.f.x, v.f.y + 1, v.f.z);
   }
 }
 const peeks = PL.map(() => ({ cam: new THREE.PerspectiveCamera(45, 1.6, 0.1, 900), f: new THREE.Vector3() })); // 자리(seat)별 친구 화면 카메라
