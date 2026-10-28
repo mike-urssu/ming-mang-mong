@@ -35,6 +35,7 @@ function broadcastSeats(r) {
 
 wss.on('connection', ws => {
   let room = null, seat = -1;
+  ws.on('error', () => {}); // 64KB 초과 등 → 처리 안 하면 프로세스가 죽음. 연결은 ws가 알아서 닫고 close가 정리함
   ws.on('message', raw => {
     let m;
     try { m = JSON.parse(raw); } catch { return; }

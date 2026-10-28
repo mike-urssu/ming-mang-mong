@@ -919,7 +919,7 @@ addEventListener('keydown', e => {
   e.preventDefault();
   if (!keys.has(e.code)) pressed.add(e.code);
   keys.add(e.code);
-  if (e.code === 'KeyR' && role !== 'guest') resetAll();
+  if (e.code === 'KeyR' && role !== 'guest') resetSeat(mySeat);
 });
 addEventListener('keyup', e => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
@@ -1032,7 +1032,7 @@ function applyTeam() { // 고르지 않은 캐릭터는 빼고, 팀에 없는 �
   if (solo && !players.some(p => chars[p.c].jumps > 1)) { btn1.latched = true; relabel(sign2, '② 계단을 타고 언덕 위로 올라가요!'); } // 2단 점프(Mang) 없이 혼자면 계단을 미리 세움
   movers.forEach(mv => { if (mv.cond()) { setMover(mv, 1); mv.told = true; } }); // 미리 풀린 장치는 조용히 열어 둠
 }
-function resetAll() { chars.forEach(c => c.off || respawn(c)); }
+function resetSeat(seat) { const p = players.find(p => role === 'local' || p.seat === seat); if (p) respawn(chars[p.c]); } // R은 누른 사람만
 function setPause(on) {
   $('#pause').classList.toggle('hidden', !on);
   $('#resume').style.display = role === 'guest' ? 'none' : '';
@@ -1141,11 +1141,11 @@ function onNet(m) {
     const p = netIn[m.seat] ??= {};
     p.x = Math.max(-1, Math.min(1, m.x)); p.z = Math.max(-1, Math.min(1, m.z));
     p.jump ||= m.j;
-    if (m.r && state === 'play') resetAll();
+    if (m.r && state === 'play') resetSeat(m.seat);
   } else if (m.t === 'left') {
     hangUp(m.seat);
     const i = players.findIndex(p => p.seat === m.seat);
-    if (i >= 0) { players.splice(i, 1); renderCards(); fx('toast', `👋 P${m.seat + 1} 친구가 나갔어요`); }
+    if (i >= 0) { players.splice(i, 1); applyTeam(); renderCards(); fx('toast', `👋 P${m.seat + 1} 친구가 나갔어요`); }
   } else if (m.t === 'start') start(m.team.map(([c, seat]) => ({ c, seat })));
   else if (m.t === 's') applySnapshot(m);
   else if (m.t === 'closed') { toast('호스트가 방을 닫았어요'); setTimeout(() => location.href = location.pathname, 2000); }
@@ -1199,7 +1199,7 @@ function sendSnapshot(now) {
 function applySnapshot(m) {
   if (state === 'title' || state === 'win') return;
   T = m.T; netEl = m.el;
-  if (JSON.stringify(m.pl) !== JSON.stringify(players.map(p => [p.c, p.seat]))) { players = m.pl.map(([c, seat]) => ({ c, seat })); renderCards(); }
+  if (JSON.stringify(m.pl) !== JSON.stringify(players.map(p => [p.c, p.seat]))) { players = m.pl.map(([c, seat]) => ({ c, seat })); applyTeam(); renderCards(); }
   m.c.forEach((a, i) => {
     const c = chars[i]; c.net = a; c.cp = a[7]; c.deaths = a[8]; c.sq = a[9];
     if (a[10] < c.mesh.scale.x - 0.2) c.mesh.scale.setScalar(a[10]); // 리스폰 '뿅'
