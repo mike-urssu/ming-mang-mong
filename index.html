@@ -169,6 +169,7 @@
     <div><kbd>WASD</kbd> / <kbd>←↑↓→</kbd> 이동 <kbd>Space</kbd> 점프</div>
     <div>🎮 게임패드: 스틱 · <kbd>A</kbd> 점프</div>
     <div><kbd>R</kbd> 체크포인트로 · <kbd>Esc</kbd> 일시정지 · <kbd>M</kbd> 음악 · ⚠️ 막대·가시·톱날 조심!</div><div>🤝 상자 밀기·줄넘기·동시 점프는 <b style="--c:#ffd23f">접속한 친구 모두가 함께</b> 해야 성공!</div>
+    <div><button class="btn small alt lowBtn"></button> 화면이 버벅이면 켜 보세요</div>
   </div>
 </div>
 
@@ -176,6 +177,7 @@
   <h2>잠깐 쉬어요</h2>
   <div><button class="btn" id="resume">계속하기</button></div>
   <div><button class="btn alt" id="musicBtn">🎵 음악 끄기</button><button class="btn alt" onclick="location.reload()">처음으로</button></div>
+  <div><button class="btn small alt lowBtn"></button></div>
 </div></div>
 
 <div id="select" class="screen hidden">
@@ -1307,16 +1309,25 @@ function renderPeeks() { // 오른쪽 작은 화면들: .view 칸 위치에 그 
 
 // ---------- loop ----------
 let last = performance.now();
-// 느린 기기: 30프레임 중 절반 넘게 25ms(40fps)를 넘기면 한 단계씩 낮춤. 다시 올리진 않음
-const LOWER = [() => renderer.setPixelRatio(Math.min(renderer.getPixelRatio(), 1.5)), () => renderer.setPixelRatio(1),
-  () => { sun.castShadow = false; }, () => renderer.setPixelRatio(0.75)];
-let perfN = 0, perfSlow = 0;
+// 화질 단계 [최대 화면 배율, 그림자]. 느린 기기: 30프레임 중 절반 넘게 25ms(40fps)를 넘기면 한 단계씩 낮춤(다시 올리진 않음)
+// 저사양 모드는 맨 아래 단계로 바로 감. 브라우저에 기억해 둠
+const QUALITY = [[2, true], [1.5, true], [1, true], [1, false], [0.75, false]], LOWEST = QUALITY.length - 1;
+let quality = 0, perfN = 0, perfSlow = 0;
+function setQuality(q) { quality = q; renderer.setPixelRatio(Math.min(devicePixelRatio, QUALITY[q][0])); sun.castShadow = QUALITY[q][1]; }
 function adaptQuality(ms) {
-  if (document.hidden || !LOWER.length) return;
+  if (document.hidden || quality === LOWEST) return;
   perfSlow += ms > 25; if (++perfN < 30) return;
-  if (perfSlow > 15) LOWER.shift()();
+  if (perfSlow > 15) setQuality(quality + 1);
   perfN = perfSlow = 0;
 }
+function setLowSpec(on) {
+  try { localStorage.lowSpec = on ? '1' : ''; } catch {}
+  setQuality(on ? LOWEST : 0);
+  document.querySelectorAll('.lowBtn').forEach(b => b.textContent = `🐢 저사양 모드 ${on ? '켜짐' : '꺼짐'}`);
+}
+const isLowSpec = () => { try { return localStorage.lowSpec === '1'; } catch { return false; } };
+document.querySelectorAll('.lowBtn').forEach(b => b.onclick = () => setLowSpec(!isLowSpec()));
+setLowSpec(isLowSpec());
 function frame(now) {
   const raw = Math.max(0, now - last); last = now; // 첫 프레임은 now < last 일 수 있음
   const dt = Math.min(raw / 1000, 0.1); // 10fps 아래로만 느려짐
