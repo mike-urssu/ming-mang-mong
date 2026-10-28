@@ -59,6 +59,7 @@
   #progress i.on { background: #ffc21a; box-shadow: 0 0 12px #ffc21a; transform: scale(1.12); }
   #progress s { width: 16px; height: 4px; background: rgba(255,255,255,.7); }
   #help { position: absolute; top: 16px; right: 16px; font-size: 14px; }
+  #falls { position: absolute; top: 14px; left: 16px; }
   #views { position: absolute; top: 60px; right: 20px; display: flex; flex-direction: column; gap: 24px; }
   .view { position: relative; width: min(24vw, 300px); aspect-ratio: 16 / 10; outline: 4px solid var(--pc); box-shadow: 0 8px 20px rgba(0,0,0,.25); } /* 안쪽은 캔버스가 직접 그림 */
   #cards { position: absolute; left: 16px; right: 16px; bottom: 16px; display: flex; justify-content: space-between; align-items: flex-end; }
@@ -138,6 +139,7 @@
 <body>
 <div id="hud" class="hidden">
   <div id="topbar"><div class="pill" id="timer">⏱ 0:00</div><div id="progress"></div></div>
+  <div class="pill" id="falls">💫 0번 넘어짐</div>
   <div class="pill" id="help">Esc 일시정지 · M 음악</div>
   <div id="views"></div>
   <div id="cards"></div>
@@ -1347,6 +1349,7 @@ function frame(now) {
   if (role === 'host' && state !== 'title' && now - lastSnap > 30) { lastSnap = now; sendSnapshot(now); } // ~30Hz, 화면 주사율과 무관
   if (state === 'play') {
     $('#timer').textContent = `⏱ ${fmt(elapsed(now))}`;
+    $('#falls').textContent = `💫 ${chars[myPlayer()?.c ?? 0].deaths}번 넘어짐`;
     const ch = Math.max(...chars.filter(c => !c.off).map(c => c.cp));
     if (ch > chapter) { chapter = ch; banner(ch); renderProgress(ch); }
     if (goal.pressed) win(now);
