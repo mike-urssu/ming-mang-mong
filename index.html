@@ -938,6 +938,7 @@ const MAPS = [
 const keys = new Set(), pressed = new Set(), gpPrev = [];
 addEventListener('keydown', e => {
   if (e.code === 'KeyM') toggleMusic();
+  if (state === 'title' && role !== 'local') return lobbyKey(e); // 온라인 대기실
   if (state === 'title' && e.code === 'Enter') return openSelect();
   if (state === 'select') return selectKey(e);
   if (e.code === 'Escape' && role !== 'guest' && (state === 'play' || state === 'pause')) return togglePause();
@@ -1154,12 +1155,13 @@ function onNet(m) {
     $('#inviteUrl').textContent = (m.url || local && m.lan?.[0] || location.origin) + '/?room=' + m.code; // 고정 도메인 우선
     $('#lanUrl').textContent = local && m.url && m.lan?.[0] ? `같은 와이파이에선 ${m.lan[0]}/?room=${m.code} 도 돼요` : '';
     $('#title').classList.add('hidden'); $('#lobby').classList.remove('hidden');
+    if (role === 'host') autoPick();
     renderLobby();
   } else if (m.t === 'seats') {
     seats = m.seats;
     for (const s of seats) if (s > mySeat && !peers[s]) call(s); // 번호가 작은 쪽이 먼저 연결을 건다
     for (const s in peers) if (!seats.includes(+s)) hangUp(+s);
-    if (role === 'host') { for (const k in picks) if (!seats.includes(+k)) delete picks[k]; sendPicks(); } // 나간 자리의 선택은 풀어줌
+    if (role === 'host') { for (const k in picks) if (!seats.includes(+k)) delete picks[k]; autoPick(); } // 나간 자리의 선택은 풀어주고, 새로 온 사람은 기본 캐릭터로
     renderLobby();
   }
   else if (m.t === 'lobby') { picks = m.picks; renderLobby(); }
@@ -1185,6 +1187,20 @@ function setPick(seat, c) { // 호스트만: 다른 사람이 고른 캐릭터�
   picks[seat] = c; SFX.click(); sendPicks(); renderLobby();
 }
 const sendPicks = () => net.send(JSON.stringify({ t: 'lobby', picks }));
+function autoPick() { // 호스트만: 아직 안 고른 사람은 왼쪽부터 비어 있는 캐릭터로
+  for (const s of seats) if (picks[s] == null) picks[s] = [0, 1, 2].find(c => !Object.values(picks).includes(c));
+  sendPicks();
+}
+const pickMine = c => role === 'host' ? setPick(0, c) : net.send(JSON.stringify({ t: 'pick', c }));
+function lobbyKey(e) { // ←→ / A D 로 내 캐릭터 바꾸기. 다른 사람이 고른 캐릭터는 건너뜀
+  const dir = ['ArrowLeft', 'KeyA'].includes(e.code) ? -1 : ['ArrowRight', 'KeyD'].includes(e.code) ? 1 : 0;
+  const taken = Object.entries(picks).filter(([s]) => +s !== mySeat).map(([, c]) => c);
+  if (!dir || taken.length > 2) return;
+  e.preventDefault();
+  let c = picks[mySeat] ?? (dir > 0 ? -1 : 3);
+  do c = (c + dir + 3) % 3; while (taken.includes(c));
+  pickMine(c);
+}
 function renderLobby() {
   $('#seats').innerHTML = [0, 1, 2].map(s => {
     const on = seats.includes(s), c = picks[s];
@@ -1197,10 +1213,8 @@ function renderLobby() {
     const cc = css(chars[i].color), cs = css(new THREE.Color(chars[i].color).multiplyScalar(0.6).getHex()); // 캐릭터 색 / 진한 그림자
     return `<button class="btn small alt${mine ? ' on' : ''}" data-i="${i}" style="--cc:${cc};--cs:${cs}" ${other ? 'disabled' : ''}>${chars[i].name}</button>`;
   }).join('');
-  $('#picks').querySelectorAll('button').forEach(b => b.onclick = () => {
-    const c = +b.dataset.i;
-    role === 'host' ? setPick(0, c) : net.send(JSON.stringify({ t: 'pick', c }));
-  });
+  $('#picks').insertAdjacentHTML('beforeend', ' <small style="opacity:.6">← → 키로 바꿔요</small>');
+  $('#picks').querySelectorAll('button').forEach(b => b.onclick = () => pickMine(+b.dataset.i));
   const ready = seats.every(s => picks[s] != null);
   $('#lobbyAct').innerHTML = role === 'host'
     ? `<button class="btn" id="goBtn" ${ready ? '' : 'disabled style="opacity:.5"'}>게임 시작 (${seats.length}명)</button>${ready ? '' : '<div style="font-size:14px;opacity:.6">모두 캐릭터를 골라야 시작할 수 있어요</div>'}`
