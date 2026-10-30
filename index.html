@@ -514,6 +514,7 @@ function cloudPad(x, top, z, { mx = 0, my = 0, mz = 0, speed = 1, crumble = fals
   for (const [px, pz] of [[-0.8, -0.8], [0.8, -0.8], [-0.8, 0.8], [0.8, 0.8], [0, 0]]) { // 아래쪽 뭉게뭉게 장식
     const b = new THREE.Mesh(sphereGeo, crumble ? crackMat : cloudPadMat); b.position.set(px, -0.35, pz); b.scale.set(0.6, 0.4, 0.6); s.mesh.add(b);
   }
+  s.half.x = s.half.z = 1.2; // 장식이 ±1.4까지 보여서 판정도 넓힘 → 작은 Ming이 가장자리에서 허공으로 빠지지 않게
   const home = s.mesh.position.clone(), prev = new THREE.Vector3(), phase = rand(0, 6);
   const st = { ph: 0, t: 0, stay: 0 }; // 0 그대로 → 1 흔들림 0.6초 → 2 떨어짐 0.8초 → 3 사라짐 3초 → 0 (금 간 구름은 밟자마자, 다른 구름은 오래 밟고 있으면)
   s.delta = new THREE.Vector3(); // 이번 프레임 이동량 → 위에 선 캐릭터를 같이 실어 나름
